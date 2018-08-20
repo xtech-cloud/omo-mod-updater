@@ -33,6 +33,7 @@ type Channel struct {
 }
 
 type Bucket struct {
+	UUID     string     `json:"uuid"`
 	Name     string     `json:"name"`
 	Channels []*Channel `json:"channels"`
 }
@@ -63,23 +64,28 @@ func MakeJSON(_bucket string, _channel string) ([]byte, error) {
 }
 
 func NewBucket(_name string) (*Bucket, error) {
-	bucket := &Bucket{
+	b := &Bucket{
 		Name:     _name,
 		Channels: make([]*Channel, 0),
 	}
 
-	exists := storage.HasBucket(bucket)
-	if exists {
+	bucket, err := storage.ReadBucket(b)
+	if nil != bucket {
 		return nil, errors.New("bucket exists")
 	}
 
-	err := storage.SaveBucket(bucket)
-	return bucket, err
+	err = storage.SaveBucket(b)
+	return b, err
 }
 
 func DeleteBucket(_name string) error {
-	bucket := &Bucket{
+	b := &Bucket{
 		Name: _name,
+	}
+
+	bucket, _ := storage.ReadBucket(b)
+	if nil == bucket {
+		return errors.New("bucket not exists")
 	}
 	return storage.DeleteBucket(bucket)
 }
@@ -88,8 +94,7 @@ func FindBucket(_name string) (*Bucket, error) {
 	bucket := &Bucket{
 		Name: _name,
 	}
-	err := storage.ReadBucket(bucket)
-	return bucket, err
+	return storage.ReadBucket(bucket)
 }
 
 func ListBucket() ([]*Bucket, error) {
@@ -137,9 +142,19 @@ func (_self *Bucket) Pull(_uuid string) ([]byte, error) {
 	res := &Res{
 		UUID: _uuid,
 	}
-	return storage.ReadRes(_self, res)
+	return storage.ReadRaw(_self, res)
 }
 
 func (_self *Bucket) Find(_uuid string) (*Res, error) {
-	return storage.FindRes(_self, _uuid)
+	res := &Res{
+		UUID: _uuid,
+	}
+	return storage.ReadRes(_self, res)
+}
+
+func (_self *Bucket) Delete(_uuid string) error {
+	res := &Res{
+		UUID: _uuid,
+	}
+	return storage.DeleteRes(_self, res)
 }

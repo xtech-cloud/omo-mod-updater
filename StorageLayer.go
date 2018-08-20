@@ -15,15 +15,15 @@ import (
 type IStorage interface {
 	Setup(_config Config) error
 
-	HasBucket(_bucket *Bucket) bool
 	SaveBucket(_bucket *Bucket) error
-	ReadBucket(_bucket *Bucket) error
+	ReadBucket(_bucket *Bucket) (*Bucket, error)
 	DeleteBucket(_bucket *Bucket) error
 
 	WriteRes(_bucket *Bucket, _res *Res, _data []byte) error
-	ReadRes(_bucket *Bucket, _res *Res) ([]byte, error)
+	ReadRes(_bucket *Bucket, _res *Res) (*Res, error)
 	ListRes(_bucket *Bucket) ([]*Res, error)
-	FindRes(_bucket *Bucket, _uuid string) (*Res, error)
+	DeleteRes(_bucket *Bucket, _res *Res) error
+	ReadRaw(_bucket *Bucket, _res *Res) ([]byte, error)
 }
 
 type IOLayer struct {
@@ -72,34 +72,26 @@ func (_self *FileLayer) SaveBucket(_bucket *Bucket) error {
 	if nil != err {
 		return err
 	}
+	_bucket.UUID = uuid
 
 	return err
 }
 
-func (_self *FileLayer) HasBucket(_bucket *Bucket) bool {
-	uuid := _self.makeMD5([]byte(_bucket.Name))
-
-	file := fmt.Sprintf("%s%s.bkt", _self.Conf.File.RootPath, uuid)
-	_, err := os.Stat(file)
-	if nil != err && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-func (_self *FileLayer) ReadBucket(_bucket *Bucket) error {
-	uuid := _self.makeMD5([]byte(_bucket.Name))
+func (_self *FileLayer) ReadBucket(_bucket *Bucket) (*Bucket, error) {
+	uuid := _self.takeBucketUUID(_bucket)
 	file := fmt.Sprintf("%s%s.bkt", _self.Conf.File.RootPath, uuid)
 	data, err := ioutil.ReadFile(file)
 	if nil != err {
-		return err
+		return nil, err
 	}
 
-	return json.Unmarshal(data, _bucket)
+	var bucket Bucket
+	err = json.Unmarshal(data, &bucket)
+	return &bucket, err
 }
 
 func (_self *FileLayer) DeleteBucket(_bucket *Bucket) error {
-	uuid := _self.makeMD5([]byte(_bucket.Name))
+	uuid := _self.takeBucketUUID(_bucket)
 	file := fmt.Sprintf("%s%s.bkt", _self.Conf.File.RootPath, uuid)
 	err := os.RemoveAll(_self.Conf.File.DataPath + uuid + "/")
 	if nil != err {
@@ -113,6 +105,7 @@ func (_self *FileLayer) DeleteBucket(_bucket *Bucket) error {
 }
 
 func (_self *FileLayer) WriteRes(_bucket *Bucket, _res *Res, _data []byte) error {
+	bucket := _self.takeBucketUUID(_bucket)
 	//补齐字段
 	_res.UUID = _self.makeUUID(_res)
 	_res.MD5 = _self.makeMD5(_data)
@@ -123,8 +116,6 @@ func (_self *FileLayer) WriteRes(_bucket *Bucket, _res *Res, _data []byte) error
 	if nil != err {
 		return err
 	}
-
-	bucket := _self.makeMD5([]byte(_bucket.Name))
 
 	//save file
 	binfile := fmt.Sprintf("%s%s%s%s", _self.Conf.File.DataPath, bucket, _res.Path, _res.File)
@@ -145,9 +136,10 @@ func (_self *FileLayer) WriteRes(_bucket *Bucket, _res *Res, _data []byte) error
 	return nil
 }
 
-func (_self *FileLayer) ReadRes(_bucket *Bucket, _res *Res) ([]byte, error) {
-	bucket := _self.makeMD5([]byte(_bucket.Name))
-	metafile := fmt.Sprintf("%s%s/%s.meta", _self.Conf.File.RootPath, bucket, _res.UUID)
+func (_self *FileLayer) ReadRaw(_bucket *Bucket, _res *Res) ([]byte, error) {
+	bucketID := _self.takeBucketUUID(_bucket)
+	resID := _self.takeResUUID(_res)
+	metafile := fmt.Sprintf("%s%s/%s.meta", _self.Conf.File.RootPath, bucketID, resID)
 	meta, err := ioutil.ReadFile(metafile)
 	if nil != err {
 		return make([]byte, 0), err
@@ -158,12 +150,12 @@ func (_self *FileLayer) ReadRes(_bucket *Bucket, _res *Res) ([]byte, error) {
 		return make([]byte, 0), err
 	}
 
-	binfile := fmt.Sprintf("%s%s%s%s", _self.Conf.File.DataPath, bucket, _res.Path, _res.File)
+	binfile := fmt.Sprintf("%s%s%s%s", _self.Conf.File.DataPath, bucketID, _res.Path, _res.File)
 	return ioutil.ReadFile(binfile)
 }
 
 func (_self *FileLayer) ListRes(_bucket *Bucket) ([]*Res, error) {
-	bucket := _self.makeMD5([]byte(_bucket.Name))
+	bucket := _self.takeBucketUUID(_bucket)
 	metadir := fmt.Sprintf("%s%s", _self.Conf.File.RootPath, bucket)
 	fis, err := ioutil.ReadDir(metadir)
 	if nil != err {
@@ -198,9 +190,11 @@ func (_self *FileLayer) ListRes(_bucket *Bucket) ([]*Res, error) {
 	return resAry, nil
 }
 
-func (_self *FileLayer) FindRes(_bucket *Bucket, _uuid string) (*Res, error) {
-	bucket := _self.makeMD5([]byte(_bucket.Name))
-	metadir := fmt.Sprintf("%s%s", _self.Conf.File.RootPath, bucket)
+func (_self *FileLayer) ReadRes(_bucket *Bucket, _res *Res) (*Res, error) {
+	bucketID := _self.takeBucketUUID(_bucket)
+	resID := _self.takeResUUID(_res)
+
+	metadir := fmt.Sprintf("%s%s", _self.Conf.File.RootPath, bucketID)
 	fis, err := ioutil.ReadDir(metadir)
 	if nil != err {
 		return nil, err
@@ -211,11 +205,11 @@ func (_self *FileLayer) FindRes(_bucket *Bucket, _uuid string) (*Res, error) {
 			continue
 		}
 
-		if fi.Name() != _uuid+".meta" {
+		if fi.Name() != resID+".meta" {
 			continue
 		}
 
-		metafile := fmt.Sprintf("%s%s/%s", _self.Conf.File.RootPath, bucket, fi.Name())
+		metafile := fmt.Sprintf("%s%s/%s", _self.Conf.File.RootPath, bucketID, fi.Name())
 		meta, err := ioutil.ReadFile(metafile)
 		if nil != err {
 			return nil, err
@@ -228,7 +222,49 @@ func (_self *FileLayer) FindRes(_bucket *Bucket, _uuid string) (*Res, error) {
 		}
 		return &res, nil
 	}
-	return nil, errors.New("not found")
+	return nil, nil
+}
+
+func (_self *FileLayer) DeleteRes(_bucket *Bucket, _res *Res) error {
+	bucketID := _self.takeBucketUUID(_bucket)
+
+	res, err := _self.ReadRes(_bucket, _res)
+	if nil != err {
+		return err
+	}
+
+	if nil == res {
+		return errors.New("not found")
+	}
+
+	binfile := fmt.Sprintf("%s%s%s%s", _self.Conf.File.DataPath, bucketID, res.Path, res.File)
+	err = os.Remove(binfile)
+	if nil != err {
+		return err
+	}
+	metafile := fmt.Sprintf("%s%s/%s.meta", _self.Conf.File.RootPath, bucketID, res.UUID)
+	err = os.Remove(metafile)
+	if nil != err {
+		return err
+	}
+	return nil
+}
+
+/// \brief filelayer的bucket的uuid是用name的MD5生成的
+func (_self *FileLayer) takeBucketUUID(_bucket *Bucket) string {
+	uuid := _bucket.UUID
+	if uuid == "" {
+		uuid = _self.makeMD5([]byte(_bucket.Name))
+	}
+	return uuid
+}
+
+func (_self *FileLayer) takeResUUID(_res *Res) string {
+	uuid := _res.UUID
+	if uuid == "" {
+		uuid = _self.makeUUID(_res)
+	}
+	return uuid
 }
 
 func (_self *FileLayer) makeUUID(_res *Res) string {

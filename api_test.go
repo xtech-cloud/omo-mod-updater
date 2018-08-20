@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func Test_Setup(_t *testing.T) {
+func Test_API(_t *testing.T) {
 	os.RemoveAll("/tmp/updater")
 
 	config := Config{
@@ -19,99 +19,113 @@ func Test_Setup(_t *testing.T) {
 	if nil != err {
 		_t.Error(err)
 	}
-}
 
-func Test_Bucket(_t *testing.T) {
-	bucket, err := NewBucket("updater")
+	bucket, err := FindBucket("updater")
+	//查找不存在的bucket应该报错
+	if nil == err {
+		_t.Error(err)
+	}
+	//查找不存在的bucket返回空值
+	if nil != bucket {
+		_t.Error("FAIL FindBucket")
+	}
+
+	bucket, err = NewBucket("updater")
+	//新建不存在的bucket不应该报错
 	if nil != err {
 		_t.Error(err)
 	}
 
-	//新建存在的bucket应该报错
 	_, err = NewBucket("updater")
+	//新建存在的bucket应该报错
 	if nil == err {
-		_t.Error("err == nil")
+		_t.Error("FAIL NewBucket")
+	}
+
+	_, err = FindBucket("updater")
+	//查找存在的bucket不应该报错
+	if nil != err {
+		_t.Error("FAIL FindBucket")
 	}
 
 	err = bucket.NewChannel("channel-01")
-	if nil != err {
-		_t.Error(err)
-	}
-
-	err = bucket.NewChannel("channel-02")
+	//新建不存在的channel不应该报错
 	if nil != err {
 		_t.Error(err)
 	}
 
 	//新建存在的channel应该报错
-	err = bucket.NewChannel("channel-02")
+	err = bucket.NewChannel("channel-01")
 	if nil == err {
-		_t.Error("err == nil")
-	}
-
-	bucket, err = FindBucket("updater")
-	if nil != err {
-		_t.Error(err)
+		_t.Error("FAIL NewChannel")
 	}
 
 	if len(bucket.Channels) == 0 {
 		_t.Error("len(channels) is 0")
 	}
 
-	_, err = FindBucket("updater2")
-	if nil == err {
-		_t.Error("err == nil")
-	}
-}
-
-func Test_Res(_t *testing.T) {
-	bucket, err := FindBucket("updater")
-	if nil != err {
-		_t.Error(err)
-	}
-
 	uuid, err := bucket.Push("1/2/", "res.txt", []byte("0123456789"))
+	//正确存放res不应该报错
 	if nil != err {
 		_t.Error(err)
 	}
 
+	//存放成功的res的uuid不应为空
 	if uuid == "" {
 		_t.Error("uuid is empty")
 	}
 
 	bytes, err := bucket.Pull(uuid)
+	//正确读取res不应该报错
 	if nil != err {
 		_t.Error(err)
 	}
+
+	//读取成功的res的内容应该匹配
 	if string(bytes) != "0123456789" {
 		_t.Error("res != 0123456789")
 	}
 
 	_, err = bucket.Find(uuid)
+	//查找存在的资源不应该报错
 	if nil != err {
 		_t.Error(err)
 	}
 
-	_, err = bucket.Find("0000000")
+	res, err := bucket.Find("0000000")
+	//查找不存在的资源应该报错
+	if nil != err {
+		_t.Error(err)
+	}
+	//查找不存在的资源应该为空值
+	if nil != res {
+		_t.Error("FAIL Find")
+	}
+
+	err = bucket.Delete(uuid)
+	//删除存在的资源不应该报错
+	if nil != err {
+		_t.Error(err)
+	}
+
+	err = bucket.Delete("123456")
+	//删除不存在的资源应该报错
 	if nil == err {
-		_t.Error("err == nil")
+		_t.Error("FAIL Delete")
 	}
-}
 
-func Test_Manifest(_t *testing.T) {
-	_, err := MakeJSON("updater", "")
+	_, err = MakeJSON("updater", "")
 	if nil != err {
 		_t.Error(err)
 	}
-}
 
-func Test_DeleteBucket(_t *testing.T) {
-	err := DeleteBucket("updater")
-	if nil != err {
-		_t.Error(err)
-	}
-	//删除不存在的bucket应该报错
 	err = DeleteBucket("updater")
+	//删除存在的bucket不应该报错
+	if nil != err {
+		_t.Error(err)
+	}
+	err = DeleteBucket("updater")
+	//删除不存在的bucket应该报错
 	if nil == err {
 		_t.Error(err)
 	}
