@@ -86,10 +86,20 @@ func Test_Res(_t *testing.T) {
 	if string(bytes) != "0123456789" {
 		_t.Error("res != 0123456789")
 	}
+
+	_, err = bucket.Find(uuid)
+	if nil != err {
+		_t.Error(err)
+	}
+
+	_, err = bucket.Find("0000000")
+	if nil == err {
+		_t.Error("err == nil")
+	}
 }
 
 func Test_Manifest(_t *testing.T) {
-	manifest, err := MakeJSON("updater", "")
+	_, err := MakeJSON("updater", "")
 	if nil != err {
 		_t.Error(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -22,6 +23,7 @@ type IStorage interface {
 	WriteRes(_bucket *Bucket, _res *Res, _data []byte) error
 	ReadRes(_bucket *Bucket, _res *Res) ([]byte, error)
 	ListRes(_bucket *Bucket) ([]*Res, error)
+	FindRes(_bucket *Bucket, _uuid string) (*Res, error)
 }
 
 type IOLayer struct {
@@ -194,6 +196,39 @@ func (_self *FileLayer) ListRes(_bucket *Bucket) ([]*Res, error) {
 
 	}
 	return resAry, nil
+}
+
+func (_self *FileLayer) FindRes(_bucket *Bucket, _uuid string) (*Res, error) {
+	bucket := _self.makeMD5([]byte(_bucket.Name))
+	metadir := fmt.Sprintf("%s%s", _self.Conf.File.RootPath, bucket)
+	fis, err := ioutil.ReadDir(metadir)
+	if nil != err {
+		return nil, err
+	}
+
+	for _, fi := range fis {
+		if fi.IsDir() {
+			continue
+		}
+
+		if fi.Name() != _uuid+".meta" {
+			continue
+		}
+
+		metafile := fmt.Sprintf("%s%s/%s", _self.Conf.File.RootPath, bucket, fi.Name())
+		meta, err := ioutil.ReadFile(metafile)
+		if nil != err {
+			return nil, err
+		}
+
+		var res Res
+		err = json.Unmarshal(meta, &res)
+		if nil != err {
+			return nil, err
+		}
+		return &res, nil
+	}
+	return nil, errors.New("not found")
 }
 
 func (_self *FileLayer) makeUUID(_res *Res) string {

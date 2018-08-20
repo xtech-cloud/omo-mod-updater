@@ -139,3 +139,7 @@ func (_self *Bucket) Pull(_uuid string) ([]byte, error) {
 	}
 	return storage.ReadRes(_self, res)
 }
+
+func (_self *Bucket) Find(_uuid string) (*Res, error) {
+	return storage.FindRes(_self, _uuid)
+}
