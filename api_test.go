@@ -60,22 +60,24 @@ func Test_API(_t *testing.T) {
 		_t.Error("FAIL NewChannel")
 	}
 
-	if len(bucket.Channels) == 0 {
-		_t.Error("len(channels) is 0")
+	res1, err := bucket.Push("1/2/", "res.txt", []byte("0123456789"))
+	//正确存放res不应该报错
+	if nil != err {
+		_t.Error(err)
 	}
 
-	uuid, err := bucket.Push("1/2/", "res.txt", []byte("0123456789"))
+	res2, err := bucket.Push("1/", "res.txt", []byte("abcdefg"))
 	//正确存放res不应该报错
 	if nil != err {
 		_t.Error(err)
 	}
 
 	//存放成功的res的uuid不应为空
-	if uuid == "" {
+	if res1 == "" {
 		_t.Error("uuid is empty")
 	}
 
-	bytes, err := bucket.Pull(uuid)
+	bytes, err := bucket.Pull(res1)
 	//正确读取res不应该报错
 	if nil != err {
 		_t.Error(err)
@@ -86,7 +88,7 @@ func Test_API(_t *testing.T) {
 		_t.Error("res != 0123456789")
 	}
 
-	_, err = bucket.Find(uuid)
+	_, err = bucket.Find(res1)
 	//查找存在的资源不应该报错
 	if nil != err {
 		_t.Error(err)
@@ -102,7 +104,31 @@ func Test_API(_t *testing.T) {
 		_t.Error("FAIL Find")
 	}
 
-	err = bucket.Delete(uuid)
+	err = bucket.Attach(res2, "channel-01")
+	//附加存在的channel不应该报错
+	if nil != err {
+		_t.Error(err)
+	}
+
+	err = bucket.Attach(res2, "channel-03")
+	//附加不存在的channel应该报错
+	if nil == err {
+		_t.Error("FAIL Attach")
+	}
+
+	c0, err := MakeJSON("updater", "")
+	if nil != err {
+		_t.Error(err)
+	}
+	_t.Log(string(c0))
+
+	c1, err := MakeJSON("updater", "channel-01")
+	if nil != err {
+		_t.Error(err)
+	}
+	_t.Log(string(c1))
+
+	err = bucket.Delete(res1)
 	//删除存在的资源不应该报错
 	if nil != err {
 		_t.Error(err)
@@ -114,9 +140,22 @@ func Test_API(_t *testing.T) {
 		_t.Error("FAIL Delete")
 	}
 
-	_, err = MakeJSON("updater", "")
+	err = bucket.Delete("123456")
+	//删除不存在的资源应该报错
+	if nil == err {
+		_t.Error("FAIL Delete")
+	}
+
+	err = bucket.DeleteChannel("channel-01")
+	//删除存在的channel不应该报错
 	if nil != err {
 		_t.Error(err)
+	}
+
+	err = bucket.DeleteChannel("channel-01")
+	//删除不存在的channel应该报错
+	if nil == err {
+		_t.Error("FAIL DeleteChannel")
 	}
 
 	err = DeleteBucket("updater")

@@ -15,15 +15,23 @@ import (
 type IStorage interface {
 	Setup(_config Config) error
 
-	SaveBucket(_bucket *Bucket) error
+	WriteBucket(_bucket *Bucket) error
 	ReadBucket(_bucket *Bucket) (*Bucket, error)
 	DeleteBucket(_bucket *Bucket) error
+
+	WriteChannel(_bucket *Bucket, _channel *Channel) error
+	ReadChannel(_bucket *Bucket, _channel *Channel) (*Channel, error)
+	DeleteChannel(_bucket *Bucket, _channel *Channel) error
 
 	WriteRes(_bucket *Bucket, _res *Res, _data []byte) error
 	ReadRes(_bucket *Bucket, _res *Res) (*Res, error)
 	ListRes(_bucket *Bucket) ([]*Res, error)
 	DeleteRes(_bucket *Bucket, _res *Res) error
 	ReadRaw(_bucket *Bucket, _res *Res) ([]byte, error)
+
+	Attach(_bucket *Bucket, _res *Res, _channel *Channel) error
+	Detach(_bucket *Bucket, _res *Res, _channel *Channel) error
+	Filter(_bucket *Bucket, _channel *Channel) ([]*Res, error)
 }
 
 type IOLayer struct {
@@ -58,7 +66,7 @@ func (_self *FileLayer) Setup(_config Config) error {
 	return nil
 }
 
-func (_self *FileLayer) SaveBucket(_bucket *Bucket) error {
+func (_self *FileLayer) WriteBucket(_bucket *Bucket) error {
 	bytes, err := json.Marshal(_bucket)
 	if nil != err {
 		return err
@@ -98,6 +106,43 @@ func (_self *FileLayer) DeleteBucket(_bucket *Bucket) error {
 		return err
 	}
 	err = os.RemoveAll(_self.Conf.File.RootPath + uuid + "/")
+	if nil != err {
+		return err
+	}
+	return os.Remove(file)
+}
+
+func (_self *FileLayer) WriteChannel(_bucket *Bucket, _channel *Channel) error {
+	bucket := _self.takeBucketUUID(_bucket)
+	channel := _self.makeMD5([]byte(_channel.Name))
+	os.MkdirAll(_self.Conf.File.RootPath+bucket+"/"+channel, 0666)
+	bytes, err := json.Marshal(_channel)
+	if nil != err {
+		return err
+	}
+	file := fmt.Sprintf("%s%s/%s.cnl", _self.Conf.File.RootPath, bucket, channel)
+	return ioutil.WriteFile(file, bytes, 0644)
+}
+
+func (_self *FileLayer) ReadChannel(_bucket *Bucket, _channel *Channel) (*Channel, error) {
+	bid := _self.takeBucketUUID(_bucket)
+	cid := _self.makeMD5([]byte(_channel.Name))
+	file := fmt.Sprintf("%s%s/%s.cnl", _self.Conf.File.RootPath, bid, cid)
+	data, err := ioutil.ReadFile(file)
+	if nil != err {
+		return nil, err
+	}
+
+	var channel Channel
+	err = json.Unmarshal(data, &channel)
+	return &channel, err
+}
+
+func (_self *FileLayer) DeleteChannel(_bucket *Bucket, _channel *Channel) error {
+	bucket := _self.takeBucketUUID(_bucket)
+	channel := _self.makeMD5([]byte(_channel.Name))
+	file := fmt.Sprintf("%s%s/%s.cnl", _self.Conf.File.RootPath, bucket, channel)
+	err := os.RemoveAll(_self.Conf.File.RootPath + bucket + "/" + channel)
 	if nil != err {
 		return err
 	}
@@ -248,6 +293,52 @@ func (_self *FileLayer) DeleteRes(_bucket *Bucket, _res *Res) error {
 		return err
 	}
 	return nil
+}
+
+func (_self *FileLayer) Attach(_bucket *Bucket, _res *Res, _channel *Channel) error {
+	bucketID := _self.takeBucketUUID(_bucket)
+	resID := _self.takeResUUID(_res)
+	channelID := _self.makeMD5([]byte(_channel.Name))
+
+	file := fmt.Sprintf("%s%s/%s/%s", _self.Conf.File.RootPath, bucketID, channelID, resID)
+	return ioutil.WriteFile(file, []byte(""), 0644)
+}
+
+func (_self *FileLayer) Detach(_bucket *Bucket, _res *Res, _channel *Channel) error {
+	bucketID := _self.takeBucketUUID(_bucket)
+	resID := _self.takeResUUID(_res)
+	channelID := _self.makeMD5([]byte(_channel.Name))
+	file := fmt.Sprintf("%s%s/%s/%s", _self.Conf.File.RootPath, bucketID, channelID, resID)
+	return os.Remove(file)
+}
+
+func (_self *FileLayer) Filter(_bucket *Bucket, _channel *Channel) ([]*Res, error) {
+	bucketID := _self.takeBucketUUID(_bucket)
+	channelID := _self.makeMD5([]byte(_channel.Name))
+	channelDir := fmt.Sprintf("%s%s/%s", _self.Conf.File.RootPath, bucketID, channelID)
+	fis, err := ioutil.ReadDir(channelDir)
+	if nil != err {
+		return make([]*Res, 0), err
+	}
+
+	bucket := &Bucket{
+		UUID: bucketID,
+	}
+	resAry := make([]*Res, 0)
+	for _, fi := range fis {
+		if fi.IsDir() {
+			continue
+		}
+
+		res, err := _self.ReadRes(bucket, &Res{UUID: fi.Name()})
+		if nil != err {
+			continue
+		}
+
+		resAry = append(resAry, res)
+
+	}
+	return resAry, nil
 }
 
 /// \brief filelayer的bucket的uuid是用name的MD5生成的

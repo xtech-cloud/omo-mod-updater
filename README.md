@@ -1,4 +1,4 @@
-# 使用方法
+# API
 
 ## 配置
 
@@ -21,11 +21,12 @@ bucket, _ := updater.NewBucket("bucket")
 uuid, err := bucket.Push("/res/", "1.txt", []byte("0123456789"))
 ```
 
-## 取出资源
-
+## 放入通道
 ```go
 bucket, _ := updater.FindBucket("bucket")
-bytes, err := updater.Pull(uuid)
+resID := "38b8c2c1093dd0fec383a9d9ac940515"
+channelName := "channel"
+bucket.Attach(resID, channelName")
 
 ```
 
@@ -35,6 +36,13 @@ bytes, err := updater.Pull(uuid)
 manifest, err := updater.MakeJSON("bucket", "channel")
 ```
 
+## 取出资源
+
+```go
+bucket, _ := updater.FindBucket("bucket")
+bytes, err := updater.Pull(uuid)
+
+```
 
 # 说明
 
