@@ -12,7 +12,7 @@ type ReqFetch struct {
 }
 
 func Serve(_addr string, _dataPath string, _bucket string) {
-	bucket, _ := FindBucket("omo-updater")
+	bucket, _ := FindBucket(_bucket)
 	if nil == bucket {
 		panic("bucket not found")
 	}
