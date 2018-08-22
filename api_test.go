@@ -5,10 +5,12 @@ import (
 	"testing"
 )
 
+var config Config
+
 func Test_API(_t *testing.T) {
 	os.RemoveAll("/tmp/updater")
 
-	config := Config{
+	config = Config{
 		Layer: "file",
 		File: FileConfig{
 			RootPath: "/tmp/updater/root/",
@@ -168,4 +170,19 @@ func Test_API(_t *testing.T) {
 	if nil == err {
 		_t.Error(err)
 	}
+}
+
+func Test_Serve(_t *testing.T) {
+	NewBucket("omo-updater")
+	bucket, _ := FindBucket("omo-updater")
+	if nil == bucket {
+		_t.Error("bucket not found")
+	}
+	bucket.NewChannel("dev")
+	res1, _ := bucket.Push("/1", "res-1.txt", []byte("0123456789"))
+	resA, _ := bucket.Push("/1/a", "res-a.txt", []byte("abcdefg"))
+	bucket.Attach(res1, "dev")
+	bucket.Attach(resA, "dev")
+
+	Serve(":8080", config.File.DataPath, "omo-updater")
 }

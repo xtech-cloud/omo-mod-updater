@@ -67,20 +67,19 @@ func (_self *FileLayer) Setup(_config Config) error {
 }
 
 func (_self *FileLayer) WriteBucket(_bucket *Bucket) error {
+	_bucket.UUID = _self.makeMD5([]byte(_bucket.Name))
+	os.MkdirAll(_self.Conf.File.DataPath+_bucket.UUID, 0666)
+	os.MkdirAll(_self.Conf.File.RootPath+_bucket.UUID, 0666)
+
 	bytes, err := json.Marshal(_bucket)
 	if nil != err {
 		return err
 	}
-
-	uuid := _self.makeMD5([]byte(_bucket.Name))
-	os.MkdirAll(_self.Conf.File.DataPath+uuid, 0666)
-	os.MkdirAll(_self.Conf.File.RootPath+uuid, 0666)
-	file := fmt.Sprintf("%s%s.bkt", _self.Conf.File.RootPath, uuid)
+	file := fmt.Sprintf("%s%s.bkt", _self.Conf.File.RootPath, _bucket.UUID)
 	err = ioutil.WriteFile(file, bytes, 0644)
 	if nil != err {
 		return err
 	}
-	_bucket.UUID = uuid
 
 	return err
 }
