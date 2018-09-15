@@ -58,3 +58,18 @@ channel是bucket中的逻辑隔离的空间，用于将一个bucket中的文件�
 
 res是一个实体文件
 
+
+# 测试
+
+- 启动服务
+
+```bash
+$ go test -v github.com/xtech-cloud/omo-mod-updater
+```
+
+- 使用curl测试API
+
+```bash
+$ curl -d '{"bucket":"omo-updater","channel":"dev"}' 127.0.0.1:8080/fetch
+$ wget http://127.0.0.1:8080/upgrade/1/a/res-a.txt
+```
